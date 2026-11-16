@@ -90,12 +90,18 @@ runs:
         CACHE_NAMESPACE: ${{ inputs.cache-key }}
         TOOL_PROFILE: ${{ inputs.tool-profile }}
         BINARYEN_VERSION: ${{ inputs.binaryen-version }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
 
         key_safe() {
           printf '%s' "$1" | sed 's/[^A-Za-z0-9._-]/-/g'
         }
+
+        binaryen_version="$BINARYEN_VERSION"
+        if [[ "$binaryen_version" == latest && ",$PLATFORM_LIST," == *,web,* ]]; then
+          binaryen_version=$(gh release view --repo WebAssembly/binaryen --json tagName --jq .tagName)
+        fi
 
         version="$TESSERA_VERSION"
         if [[ "$version" == auto ]]; then
@@ -133,7 +139,7 @@ runs:
         target_key=$(key_safe "$TARGET_LIST")
         cache_key=$(key_safe "$CACHE_NAMESPACE")
         profile_key=$(key_safe "$TOOL_PROFILE")
-        binaryen_key=$(key_safe "$BINARYEN_VERSION")
+        binaryen_key=$(key_safe "$binaryen_version")
 
         {
           echo "version=$version"
@@ -144,6 +150,7 @@ runs:
           echo "cache_key=$cache_key"
           echo "profile_key=$profile_key"
           echo "binaryen_key=$binaryen_key"
+          echo "binaryen_version=$binaryen_version"
         } >> "$GITHUB_OUTPUT"
 
     - name: Restore Cargo and build cache
@@ -271,7 +278,7 @@ runs:
       if: contains(inputs.platforms, 'web')
       shell: bash
       env:
-        BINARYEN_VERSION: ${{ inputs.binaryen-version }}
+        BINARYEN_VERSION: ${{ steps.resolve.outputs.binaryen_version }}
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
