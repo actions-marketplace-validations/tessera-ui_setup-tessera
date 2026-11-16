@@ -308,7 +308,23 @@ runs:
             command -v wasm-opt >/dev/null || brew install binaryen
             ;;
           Windows)
-            command -v wasm-opt >/dev/null || choco install binaryen --no-progress -y
+            case "${RUNNER_ARCH:-X64}" in
+              X64) binaryen_arch=x86_64 ;;
+              ARM64) binaryen_arch=arm64 ;;
+              *) echo "Unsupported Windows architecture for Binaryen: ${RUNNER_ARCH:-unknown}" >&2; exit 2 ;;
+            esac
+            archive="binaryen-$BINARYEN_VERSION-$binaryen_arch-windows.tar.gz"
+            directory="$HOME/.cache/setup-tessera/binaryen/$BINARYEN_VERSION"
+            if [[ -x "$directory/bin/wasm-opt.exe" ]]; then
+              echo "$directory/bin" >> "$GITHUB_PATH"
+              exit 0
+            fi
+            mkdir -p "$directory"
+            cd "$RUNNER_TEMP"
+            gh release download "$BINARYEN_VERSION" --repo WebAssembly/binaryen --pattern "$archive" --pattern "$archive.sha256"
+            sha256sum -c "$archive.sha256"
+            tar -xzf "$archive" -C "$directory" --strip-components=1
+            echo "$directory/bin" >> "$GITHUB_PATH"
             ;;
           *)
             echo "Unsupported runner for Binaryen: ${RUNNER_OS:-unknown}" >&2
