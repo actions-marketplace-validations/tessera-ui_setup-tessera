@@ -194,6 +194,7 @@ runs:
           tool_bin+=".exe"
         fi
         mkdir -p "$(dirname "$tool_bin")"
+        echo "CARGO_TARGET_DIR=$TARGET_DIRECTORY" >> "$GITHUB_ENV"
 
         if [[ -x "$tool_bin" ]]; then
           echo "Using cached cargo-tessera ($TESSERA_VERSION)."
