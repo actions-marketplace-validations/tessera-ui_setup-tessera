@@ -117,7 +117,7 @@ runs:
             key="workspace-$(git rev-parse HEAD 2>/dev/null || echo unknown)"
             ;;
           crates-io)
-            number=$(curl --fail --silent --show-error https://crates.io/api/v1/crates/cargo-tessera | jq -r .crate.max_version)
+            number=$(curl --fail --silent --show-error https://index.crates.io/ca/rg/cargo-tessera | jq -s -r 'map(select(.yanked == false)) | last | .vers')
             version="crates-io:$number"
             key="$version"
             ;;
