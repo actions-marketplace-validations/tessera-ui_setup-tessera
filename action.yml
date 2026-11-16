@@ -84,8 +84,18 @@ runs:
       env:
         TESSERA_VERSION: ${{ inputs.tessera-version }}
         TESSERA_REPOSITORY: ${{ inputs.tessera-repository }}
+        PLATFORM_LIST: ${{ inputs.platforms }}
+        TOOL_LIST: ${{ inputs.tools }}
+        TARGET_LIST: ${{ inputs.targets || inputs.target }}
+        CACHE_NAMESPACE: ${{ inputs.cache-key }}
+        TOOL_PROFILE: ${{ inputs.tool-profile }}
+        BINARYEN_VERSION: ${{ inputs.binaryen-version }}
       run: |
         set -euo pipefail
+
+        key_safe() {
+          printf '%s' "$1" | sed 's/[^A-Za-z0-9._-]/-/g'
+        }
 
         version="$TESSERA_VERSION"
         if [[ "$version" == auto ]]; then
@@ -117,9 +127,23 @@ runs:
             ;;
         esac
 
+        key=$(key_safe "$key")
+        platforms_key=$(key_safe "$PLATFORM_LIST")
+        tools_key=$(key_safe "${TOOL_LIST:-none}")
+        target_key=$(key_safe "$TARGET_LIST")
+        cache_key=$(key_safe "$CACHE_NAMESPACE")
+        profile_key=$(key_safe "$TOOL_PROFILE")
+        binaryen_key=$(key_safe "$BINARYEN_VERSION")
+
         {
           echo "version=$version"
           echo "key=$key"
+          echo "platforms_key=$platforms_key"
+          echo "tools_key=$tools_key"
+          echo "target_key=$target_key"
+          echo "cache_key=$cache_key"
+          echo "profile_key=$profile_key"
+          echo "binaryen_key=$binaryen_key"
         } >> "$GITHUB_OUTPUT"
 
     - name: Restore Cargo and build cache
@@ -130,9 +154,9 @@ runs:
           ~/.cargo/registry
           ~/.cargo/git
           ${{ inputs.target-directory }}
-        key: tessera-cargo-${{ inputs.cache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.key }}-${{ inputs.platforms }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
+        key: tessera-cargo-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.platforms_key }}-${{ steps.resolve.outputs.target_key }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
         restore-keys: |
-          tessera-cargo-${{ inputs.cache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.key }}-${{ inputs.platforms }}-
+          tessera-cargo-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.platforms_key }}-${{ steps.resolve.outputs.target_key }}-
 
     - name: Restore Tessera tools
       if: inputs.cache == 'true'
@@ -143,9 +167,9 @@ runs:
           ~/.cargo/bin
           ~/.cargo/.crates.toml
           ~/.cargo/.crates2.json
-        key: tessera-tools-${{ inputs.cache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.key }}-${{ inputs.tool-profile }}-${{ inputs.tools }}-${{ inputs.binaryen-version }}-${{ hashFiles('crates/cargo-tessera/**') }}
+        key: tessera-tools-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.profile_key }}-${{ steps.resolve.outputs.tools_key }}-${{ steps.resolve.outputs.binaryen_key }}-${{ hashFiles('crates/cargo-tessera/**') }}
         restore-keys: |
-          tessera-tools-${{ inputs.cache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.key }}-${{ inputs.tool-profile }}-
+          tessera-tools-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.profile_key }}-
 
     - name: Install Tessera CLI
       shell: bash
