@@ -1,0 +1,76 @@
+name: Probe workspace cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      tessera-ref:
+        description: Tessera revision to check out
+        required: true
+        default: a7881399860bd6e06737f891154269406581f964
+      action-ref:
+        description: Setup action revision to test
+        required: true
+        default: v1.0.0
+      cache-key:
+        description: Cache namespace for the cold and warm runs
+        required: true
+        default: workspace-probe-1
+      expect-fresh:
+        description: Require the first alias invocation to be fully fresh
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_LOG: cargo::core::compiler::fingerprint=info
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: tessera-ui/tessera
+          ref: ${{ inputs.tessera-ref }}
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          path: .setup-tessera
+          ref: ${{ inputs.action-ref }}
+      - uses: ./.setup-tessera
+        with:
+          tessera-version: workspace
+          platforms: host
+          tools: ""
+          cache-key: ${{ inputs.cache-key }}
+      - name: Probe the unchanged workspace alias twice
+        env:
+          EXPECT_FRESH: ${{ inputs.expect-fresh }}
+        run: |
+          set -euo pipefail
+          mkdir -p probe-logs
+          git diff --exit-code -- .cargo/config.toml
+          for pass in first second; do
+            cargo --verbose tessera --help 2>&1 | tee "probe-logs/$pass.log"
+            count=$(grep -cE '^ *Compiling ' "probe-logs/$pass.log" || true)
+            fresh=$(grep -cE '^ *Fresh ' "probe-logs/$pass.log" || true)
+            echo "$pass: compiled=$count fresh=$fresh" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [[ "$pass" == second || "$EXPECT_FRESH" == true ]]; then
+              test "$count" -eq 0
+              grep -qE '^ *Fresh cargo-tessera ' "probe-logs/$pass.log"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-cache-${{ matrix.os }}-${{ github.run_attempt }}
+          path: probe-logs
