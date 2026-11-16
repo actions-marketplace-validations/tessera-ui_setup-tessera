@@ -5,7 +5,7 @@ Set up Rust, Tessera, and the platform toolchains used by Tessera applications.
 ## Usage
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
 ```
 
 The default setup installs stable Rust, `rustfmt`, `rust-src`, `rust-analyzer`,
@@ -26,19 +26,19 @@ with its cache disabled so this action can cache the complete Tessera toolchain.
 Use an explicit source for reproducible builds:
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
   with:
     tessera-version: workspace
 ```
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
   with:
     tessera-version: crates-io:0.5.0
 ```
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
   with:
     tessera-version: git:0123456789abcdef0123456789abcdef01234567
 ```
@@ -50,7 +50,7 @@ toolchain. Android and iOS are opt-in because they require platform SDKs and
 platform-specific runners.
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
   with:
     platforms: host,web,android
     android-java-version: "21"
@@ -58,7 +58,7 @@ platform-specific runners.
 ```
 
 ```yaml
-- uses: tessera-ui/setup-tessera@v1
+- uses: tessera-ui/setup-tessera@v1.0.0
   with:
     platforms: host,web,ios
 ```
