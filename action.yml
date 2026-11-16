@@ -273,6 +273,7 @@ runs:
         if ! command -v xcodegen >/dev/null; then
           brew install xcodegen
         fi
+        rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
     - name: Set up Binaryen
       if: contains(inputs.platforms, 'web')
