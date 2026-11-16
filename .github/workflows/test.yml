@@ -1,0 +1,26 @@
+name: Test setup action
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          tessera-version: crates-io:0.5.0
+      - name: Verify installed toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target list --installed | grep -Fx wasm32-unknown-unknown
+          cargo tessera --version
+          cargo nextest --version
+          rust-script --version
+          wasm-opt --version
