@@ -18,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           rustup target list --installed | grep -Fx wasm32-unknown-unknown
-          cargo tessera --version
+          cargo tessera --help
           cargo nextest --version
           rust-script --version
           wasm-opt --version
