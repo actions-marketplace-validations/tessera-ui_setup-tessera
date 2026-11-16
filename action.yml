@@ -1,6 +1,9 @@
 name: Set up Tessera
 description: Set up Rust, Tessera, and the selected Tessera platform toolchains.
 author: Tessera UI
+branding:
+  icon: package
+  color: orange
 inputs:
   toolchain:
     description: Rust toolchain passed to setup-rust-toolchain.

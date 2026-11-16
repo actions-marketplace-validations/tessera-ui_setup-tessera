@@ -65,8 +65,8 @@ platform-specific runners.
 
 Android setup installs Java 21 by default, the requested NDK, and the
 `aarch64-linux-android` and `x86_64-linux-android` Rust targets. iOS setup
-requires macOS and Xcode and installs XcodeGen when needed. The iOS build then
-adds the exact simulator or device targets selected by Xcode.
+requires macOS and Xcode, installs XcodeGen when needed, and prepares the
+`aarch64-apple-ios`, `aarch64-apple-ios-sim`, and `x86_64-apple-ios` Rust targets.
 
 ## Inputs
 
@@ -78,3 +78,7 @@ cache namespace.
 
 Use `cache-key` when two jobs use incompatible build configurations, such as
 different feature sets or profiles.
+
+## License
+
+[MIT](LICENSE). Installed tools retain their respective licenses.
