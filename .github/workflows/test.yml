@@ -13,8 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./
-        with:
-          tessera-version: crates-io:0.5.0
       - name: Verify installed toolchain
         shell: bash
         run: |
