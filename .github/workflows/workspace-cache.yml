@@ -58,6 +58,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p probe-logs
+          if [[ -f "$RUNNER_TEMP/setup-tessera-build.jsonl" ]]; then
+            cp "$RUNNER_TEMP/setup-tessera-build.jsonl" probe-logs/setup.jsonl
+            built=$(jq -s '[.[] | select(.reason == "compiler-artifact" and .fresh == false)] | length' probe-logs/setup.jsonl)
+            echo "setup: compiled=$built" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [[ "$EXPECT_FRESH" == true ]]; then test "$built" -eq 0; fi
+          fi
           git diff --exit-code -- .cargo/config.toml
           for pass in first second; do
             cargo --verbose tessera --help 2>&1 | tee "probe-logs/$pass.log"
@@ -69,6 +75,8 @@ jobs:
               grep -qE '^ *Fresh cargo-tessera ' "probe-logs/$pass.log"
             fi
           done
+          cargo tessera --help 2>&1 | tee probe-logs/default.log
+          test "$(grep -cE '^ *Compiling ' probe-logs/default.log || true)" -eq 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
