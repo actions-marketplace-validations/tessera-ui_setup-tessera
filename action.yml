@@ -65,6 +65,12 @@ inputs:
   cache-key:
     description: Additional cache namespace for incompatible build configurations.
     default: v1
+  cache-scope:
+    description: Cargo cache scope; jobs running the same builds may share one.
+    default: ${{ github.job }}
+  cache-save:
+    description: Save the caches after the job. Pull request caches would evict the default branch caches they restore from, so they are not saved by default.
+    default: ${{ !startsWith(github.event_name, 'pull_request') }}
 runs:
   using: composite
   steps:
@@ -91,6 +97,11 @@ runs:
         TOOL_LIST: ${{ inputs.tools }}
         TARGET_LIST: ${{ inputs.targets || inputs.target }}
         CACHE_NAMESPACE: ${{ inputs.cache-key }}
+        CACHE_SCOPE: ${{ inputs.cache-scope }}
+        RUST_CACHE_KEY: ${{ steps.rust.outputs.cachekey }}
+        CARGO_INPUTS_HASH: ${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
+        CLI_SOURCES_HASH: ${{ hashFiles('crates/cargo-tessera/**') }}
+        TARGET_DIRECTORY: ${{ inputs.target-directory }}
         TOOL_PROFILE: ${{ inputs.tool-profile }}
         BINARYEN_VERSION: ${{ inputs.binaryen-version }}
         GH_TOKEN: ${{ github.token }}
@@ -141,46 +152,58 @@ runs:
         tools_key=$(key_safe "${TOOL_LIST:-none}")
         target_key=$(key_safe "$TARGET_LIST")
         cache_key=$(key_safe "$CACHE_NAMESPACE")
+        scope_key=$(key_safe "$CACHE_SCOPE")
         profile_key=$(key_safe "$TOOL_PROFILE")
         binaryen_key=$(key_safe "$binaryen_version")
         build_environment=$(env | LC_ALL=C sort | grep -E '^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_INCREMENTAL|CARGO_PROFILE_[^=]*|CARGO_BUILD_[^=]*|CC|CXX|CFLAGS|CXXFLAGS|LDFLAGS)=' | sha256sum | cut -d' ' -f1)
+        cargo_prefix="tessera-cargo-v3-$cache_key-$RUNNER_OS-$RUNNER_ARCH-$scope_key-$RUST_CACHE_KEY-$build_environment-$platforms_key-$target_key-"
+        tools_prefix="tessera-tools-v2-$cache_key-$RUNNER_OS-$RUNNER_ARCH-$RUST_CACHE_KEY-$build_environment-$key-$profile_key-"
 
         {
           echo "version=$version"
-          echo "key=$key"
-          echo "platforms_key=$platforms_key"
-          echo "tools_key=$tools_key"
-          echo "target_key=$target_key"
-          echo "cache_key=$cache_key"
-          echo "profile_key=$profile_key"
-          echo "binaryen_key=$binaryen_key"
           echo "binaryen_version=$binaryen_version"
-          echo "build_environment=$build_environment"
+          # Registry sources are re-extracted from the cached archives with their original timestamps.
+          echo "cargo_paths<<EOF"
+          echo "~/.cargo/registry/index"
+          echo "~/.cargo/registry/cache"
+          echo "~/.cargo/git"
+          echo "~/.cargo/.tessera-mobile"
+          echo "$TARGET_DIRECTORY"
+          echo "EOF"
+          echo "cargo_key=$cargo_prefix$CARGO_INPUTS_HASH-$key-sources-v4"
+          echo "cargo_restore_keys<<EOF"
+          echo "$cargo_prefix$CARGO_INPUTS_HASH-"
+          echo "$cargo_prefix"
+          echo "EOF"
+          echo "tools_key=$tools_prefix$tools_key-$binaryen_key-$CLI_SOURCES_HASH"
+          echo "tools_restore_key=$tools_prefix"
         } >> "$GITHUB_OUTPUT"
 
     - name: Restore Cargo and build cache
-      id: cargo-cache
-      if: inputs.cache == 'true'
+      if: inputs.cache == 'true' && inputs.cache-save == 'true'
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          ~/.cargo/.tessera-mobile
-          ${{ inputs.target-directory }}
-        key: tessera-cargo-v2-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.build_environment }}-${{ steps.resolve.outputs.platforms_key }}-${{ steps.resolve.outputs.target_key }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}-${{ steps.resolve.outputs.key }}-sources-v4
-        restore-keys: |
-          tessera-cargo-v2-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.build_environment }}-${{ steps.resolve.outputs.platforms_key }}-${{ steps.resolve.outputs.target_key }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}-
-          tessera-cargo-v2-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.build_environment }}-${{ steps.resolve.outputs.platforms_key }}-${{ steps.resolve.outputs.target_key }}-
+        path: ${{ steps.resolve.outputs.cargo_paths }}
+        key: ${{ steps.resolve.outputs.cargo_key }}
+        restore-keys: ${{ steps.resolve.outputs.cargo_restore_keys }}
+
+    - name: Restore Cargo and build cache without saving
+      if: inputs.cache == 'true' && inputs.cache-save != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.resolve.outputs.cargo_paths }}
+        key: ${{ steps.resolve.outputs.cargo_key }}
+        restore-keys: ${{ steps.resolve.outputs.cargo_restore_keys }}
 
     - name: Restore unchanged source timestamps
       if: inputs.cache == 'true'
-      uses: tessera-ui/setup-tessera/source-mtimes@cb1493390724cb8465d61b68219a594c53d1958d
+      uses: tessera-ui/setup-tessera/cargo-cache@a745f7d18c1b515edde7d14577a58273e1840574
       with:
         target-directory: ${{ inputs.target-directory }}
+        save: ${{ inputs.cache-save }}
 
     - name: Restore Tessera tools
-      if: inputs.cache == 'true'
+      if: inputs.cache == 'true' && inputs.cache-save == 'true'
       uses: actions/cache@v4
       with:
         path: |
@@ -188,9 +211,20 @@ runs:
           ~/.cargo/bin
           ~/.cargo/.crates.toml
           ~/.cargo/.crates2.json
-        key: tessera-tools-v2-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.build_environment }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.profile_key }}-${{ steps.resolve.outputs.tools_key }}-${{ steps.resolve.outputs.binaryen_key }}-${{ hashFiles('crates/cargo-tessera/**') }}
-        restore-keys: |
-          tessera-tools-v2-${{ steps.resolve.outputs.cache_key }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ steps.resolve.outputs.build_environment }}-${{ steps.resolve.outputs.key }}-${{ steps.resolve.outputs.profile_key }}-
+        key: ${{ steps.resolve.outputs.tools_key }}
+        restore-keys: ${{ steps.resolve.outputs.tools_restore_key }}
+
+    - name: Restore Tessera tools without saving
+      if: inputs.cache == 'true' && inputs.cache-save != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cache/setup-tessera
+          ~/.cargo/bin
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+        key: ${{ steps.resolve.outputs.tools_key }}
+        restore-keys: ${{ steps.resolve.outputs.tools_restore_key }}
 
     - name: Install Tessera CLI
       shell: bash

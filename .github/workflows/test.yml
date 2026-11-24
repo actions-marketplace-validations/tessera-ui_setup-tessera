@@ -13,13 +13,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        cache-save: ["true", "false"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Test Cargo source timestamp restoration
+      - name: Test Cargo cache preparation
         shell: bash
-        run: node --test scripts/source-mtimes.test.cjs
+        run: node --test scripts/cargo-cache.test.cjs
       - uses: ./
+        with:
+          cache-save: ${{ matrix.cache-save }}
       - name: Verify installed toolchain
         shell: bash
         run: |
