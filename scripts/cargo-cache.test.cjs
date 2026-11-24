@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { restoreSourceMtimes, saveSourceMtimes } = require('../source-mtimes/source-mtimes.cjs');
+const { pruneTarget } = require('../cargo-cache/prune.cjs');
+const { restoreSourceMtimes, saveSourceMtimes } = require('../cargo-cache/source-mtimes.cjs');
 
 for (const watchDirectory of [false, true]) {
 test(`Cargo freshness survives checkout (explicit directory watch: ${watchDirectory})`, () => {
@@ -89,3 +90,36 @@ test(`Cargo freshness survives checkout (explicit directory watch: ${watchDirect
   }
 });
 }
+
+test('Pruning keeps binaries and dependencies fresh while dropping test harnesses', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-tessera-prune-'));
+  try {
+    const target = path.join(root, 'target');
+    const cargo = args => execFileSync('cargo', [...args, '--offline', '--message-format=json'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, CARGO_TARGET_DIR: target, CARGO_TERM_COLOR: 'never' },
+    }).trim().split('\n').map(line => JSON.parse(line))
+      .filter(message => message.reason === 'compiler-artifact');
+    fs.mkdirSync(path.join(root, 'helper/src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'helper/Cargo.toml'), '[package]\nname = "prune-helper"\nversion = "0.1.0"\nedition = "2021"\n');
+    fs.writeFileSync(path.join(root, 'helper/src/lib.rs'), 'pub fn value() -> u8 { 1 }\n');
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'Cargo.toml'), '[package]\nname = "prune-fixture"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nprune-helper = { path = "helper" }\n');
+    fs.writeFileSync(path.join(root, 'src/main.rs'), 'fn main() { println!("{}", prune_helper::value()); }\n\n#[test]\nfn value() { assert_eq!(prune_helper::value(), 1); }\n');
+    cargo(['build']);
+    const [harness] = cargo(['test', '--no-run']).filter(message => message.profile.test).map(message => message.executable);
+    fs.mkdirSync(path.join(target, 'packages/prune-fixture'), { recursive: true });
+    fs.writeFileSync(path.join(target, 'packages/prune-fixture/app.bin'), 'package');
+
+    assert.ok(pruneTarget(target) > 0);
+    assert.equal(fs.existsSync(harness), false);
+    assert.equal(fs.existsSync(path.join(target, 'packages')), false);
+    assert.ok(cargo(['build']).every(message => message.fresh));
+    const rebuilt = cargo(['test', '--no-run']);
+    assert.ok(rebuilt.filter(message => !message.profile.test).every(message => message.fresh));
+    assert.equal(rebuilt.find(message => message.profile.test).fresh, false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

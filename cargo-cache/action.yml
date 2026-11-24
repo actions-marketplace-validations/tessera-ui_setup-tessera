@@ -1,0 +1,13 @@
+name: Prepare the Cargo cache
+description: Restore unchanged source timestamps, then snapshot them and prune regenerable outputs before the cache is saved.
+inputs:
+  target-directory:
+    description: Cached Cargo target directory.
+    required: true
+  save:
+    description: Prepare the target directory for a cache save after the job.
+    default: "true"
+runs:
+  using: node24
+  main: index.cjs
+  post: post.cjs

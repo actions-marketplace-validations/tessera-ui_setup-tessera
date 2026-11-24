@@ -10,4 +10,6 @@ try {
   process.exit(0);
 }
 restoreSourceMtimes(root, target);
-fs.appendFileSync(process.env.GITHUB_STATE, `paths=${JSON.stringify({ root, target })}\n`);
+if (process.env.INPUT_SAVE === 'true') {
+  fs.appendFileSync(process.env.GITHUB_STATE, `paths=${JSON.stringify({ root, target })}\n`);
+}
