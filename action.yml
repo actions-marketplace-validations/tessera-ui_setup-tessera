@@ -197,7 +197,7 @@ runs:
 
     - name: Restore unchanged source timestamps
       if: inputs.cache == 'true'
-      uses: tessera-ui/setup-tessera/cargo-cache@a745f7d18c1b515edde7d14577a58273e1840574
+      uses: tessera-ui/setup-tessera/cargo-cache@071b8e05e933aa4e2c9ebf6f3bcc4f8545dd5b78
       with:
         target-directory: ${{ inputs.target-directory }}
         save: ${{ inputs.cache-save }}
